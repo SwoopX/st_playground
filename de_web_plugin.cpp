@@ -5533,6 +5533,75 @@ void DeRestPluginPrivate::addSensorNode(const deCONZ::Node *node, const SensorFi
     q->startZclAttributeTimer(checkZclAttributesDelay);
 
     queSaveDb(DB_SENSORS , DB_SHORT_SAVE_DELAY);
+	
+    if (node->isRouter() && sensorNode.fingerPrint().hasInCluster(IAS_ZONE_CLUSTER_ID))
+    {
+        DBG_Printf(DBG_INFO, "[IAS] write IAS CIE address for 0x%016llx\n", sensorNode.address().ext());
+                    
+        // write CIE address needed for some IAS Zone devices
+        const quint64 iasCieAddress = apsCtrl->getParameter(deCONZ::ParamMacAddress);
+        deCONZ::ZclAttribute attr(0x0010, deCONZ::ZclIeeeAddress, QLatin1String("CIE address"), deCONZ::ZclReadWrite, false);
+        attr.setValue(iasCieAddress);
+        
+        if (writeAttribute(sensor2, sensorNode.fingerPrint().endpoint, IAS_ZONE_CLUSTER_ID, attr, 0))
+        {
+            // mark done
+            item->setValue(item->toNumber() & ~R_PENDING_WRITE_CIE_ADDRESS);
+            DBG_Printf(DBG_INFO, "[IAS] IAS CIE address written\n");
+            
+            {
+                DBG_Printf(DBG_INFO, "[IAS] send IAS zone enroll response to 0x%016llx\n", sensorNode.address().ext());
+
+                deCONZ::ApsDataRequest req;
+                deCONZ::ZclFrame zclFrame;
+
+                // ZDP Header
+                req.dstAddress() = sensorNode.address();
+                req.setDstAddressMode(deCONZ::ApsNwkAddress);
+                req.setProfileId(sensorNode.fingerPrint().profileId);
+                req.setClusterId(IAS_ZONE_CLUSTER_ID);
+                req.setDstAddressMode(deCONZ::ApsExtAddress);
+                req.setSrcEndpoint(endpoint());
+                req.setTxOptions(deCONZ::ApsTxAcknowledgedTransmission);
+
+                zclFrame.setSequenceNumber(zclSeq++);
+                zclFrame.setCommandId(0x00); // enroll response
+
+                zclFrame.setFrameControl(deCONZ::ZclFCClusterCommand |
+                                         deCONZ::ZclFCDirectionClientToServer);
+
+                { // payload
+                    QDataStream stream(&zclFrame.payload(), QIODevice::WriteOnly);
+                    stream.setByteOrder(QDataStream::LittleEndian);
+
+                    quint8 code = 0x00; // success
+                    quint8 zoneId = 100;
+
+                    stream << code;
+                    stream << zoneId;
+                }
+
+                { // ZCL frame
+                    QDataStream stream(&req.asdu(), QIODevice::WriteOnly);
+                    stream.setByteOrder(QDataStream::LittleEndian);
+                    zclFrame.writeToStream(stream);
+                }
+
+                DBG_Printf(DBG_INFO, "[IAS] IAS Zone send enroll reponse\n");
+                if (apsCtrl->apsdeDataRequest(req) == deCONZ::Success)
+                {
+                    // mark done
+                    item->setValue(item->toNumber() & ~R_PENDING_ENROLL_RESPONSE);
+                    DBG_Printf(DBG_INFO, "[IAS] IAS Zone enrolled successfully\n");
+                }
+            }
+        }
+        else
+        {
+            DBG_Printf(DBG_INFO, "[IAS] IAS CIE address write seems to have failed\n");
+        }
+    }
+
 }
 
 /*! Updates  SensorNode fingerprint if needed.
@@ -13985,6 +14054,7 @@ void DeRestPluginPrivate::delayedFastEnddeviceProbe(const deCONZ::NodeEvent *eve
         QString modelId;
         QString swBuildId;
         QString dateCode;
+        quint8 iasZoneState = 0;
         quint16 iasZoneType = 0;
         bool swBuildIdAvailable = false;
         bool dateCodeAvailable = false;
@@ -14048,6 +14118,10 @@ void DeRestPluginPrivate::delayedFastEnddeviceProbe(const deCONZ::NodeEvent *eve
                     }
                     else if (cl.id() == IAS_ZONE_CLUSTER_ID)
                     {
+                        if (attr.id() == 0x0000) // Zone state
+                        {
+                            iasZoneState = attr.numericValue().u8;
+                        }
                         if (attr.id() == 0x0001 && attr.numericValue().u64 != 0) // Zone type
                         {
                             DBG_Assert(attr.numericValue().u64 <= UINT16_MAX);
@@ -14088,6 +14162,7 @@ void DeRestPluginPrivate::delayedFastEnddeviceProbe(const deCONZ::NodeEvent *eve
                     QDataStream stream(&zclFrame.payload(), QIODevice::WriteOnly);
                     stream.setByteOrder(QDataStream::LittleEndian);
 
+                    stream << (quint16)0x0000; // IAS Zone state
                     stream << (quint16)0x0001; // IAS Zone type
                 }
 
@@ -14243,94 +14318,133 @@ void DeRestPluginPrivate::delayedFastEnddeviceProbe(const deCONZ::NodeEvent *eve
         if (!sensor || searchSensorsState != SearchSensorsActive)
         {
             // do nothing
+            DBG_Printf(DBG_INFO, "[444] Sensor not available or sensor search not active\n");
         }
-        else if (iasZoneType != 0)
+        
+        else if (sensor && searchSensorsState == SearchSensorsActive)
         {
-            ResourceItem *item = nullptr;
-            // the RConfigPending pending item might be in another sensor resource
-            for (auto &s: sensors)
-            {
-                if (fastProbeAddr.ext() != s.address().ext() || s.deletedState() != Sensor::StateNormal)
+            // Check if sensor is enrolled
+            DBG_Printf(DBG_INFO, "[444] Sensor available and sensor search active\n");
+			if (iasZoneState == 0)
+			{
+				DBG_Printf(DBG_INFO, "[444] Sensor not enrolled\n");
+                readAttributes(sensor, sensor->fingerPrint().endpoint, IAS_ZONE_CLUSTER_ID, { 0x0000 });
+				
+				if (iasZoneType != 0)
+				{
+					DBG_Printf(DBG_INFO, "[444] IAS zone type check successfully passed. Not 0\n");
+					ResourceItem *item = nullptr;
+					// the RConfigPending pending item might be in another sensor resource
+					for (auto &s: sensors)
+					{
+						if (fastProbeAddr.ext() != s.address().ext() || s.deletedState() != Sensor::StateNormal)
+						{
+							continue;
+						}
+
+						if (s.fingerPrint().hasInCluster(IAS_ZONE_CLUSTER_ID))
+						{
+							DBG_Printf(DBG_INFO, "[444] IAS zone cluster identified\n");
+							item = s.item(RConfigPending);
+						}
+
+						if (item)
+						{
+							break;
+						}
+						else if(!item && iasZoneState != 1) // and not enrolled
+						{
+							DBG_Printf(DBG_INFO, "[444] No config pending and not enrolled\n");
+							item = s.addItem(DataTypeUInt8, RConfigPending);
+							item->setValue(item->toNumber() | R_PENDING_WRITE_CIE_ADDRESS | R_PENDING_ENROLL_RESPONSE);
+						}
+					}
+					
+					if (item && item->toNumber() == 0)
+					{
+						DBG_Printf(DBG_INFO, "[444] IAS sensor config pending value is 0\n");
+						DBG_Printf(DBG_INFO, "[444] Re-set to 48\n");
+						item->setValue(item->toNumber() | R_PENDING_WRITE_CIE_ADDRESS | R_PENDING_ENROLL_RESPONSE);
+					}
+
+					if (item && (item->toNumber() & R_PENDING_WRITE_CIE_ADDRESS))
+					{
+						// write CIE address needed for some IAS Zone devices
+						const quint64 iasCieAddress = apsCtrl->getParameter(deCONZ::ParamMacAddress);
+						deCONZ::ZclAttribute attr(0x0010, deCONZ::ZclIeeeAddress, QLatin1String("CIE address"), deCONZ::ZclReadWrite, false);
+						attr.setValue(iasCieAddress);
+
+						DBG_Printf(DBG_INFO, "[5] write IAS CIE address for 0x%016llx\n", sc->address.ext());
+
+						if (writeAttribute(sensor, sensor->fingerPrint().endpoint, IAS_ZONE_CLUSTER_ID, attr, 0))
+						{
+							// mark done
+							item->setValue(item->toNumber() & ~R_PENDING_WRITE_CIE_ADDRESS);
+							return;
+						}
+					}
+					else if (item && (item->toNumber() & R_PENDING_ENROLL_RESPONSE))
+					{
+						DBG_Printf(DBG_INFO, "[6] send IAS zone enroll response to 0x%016llx\n", sc->address.ext());
+
+						deCONZ::ApsDataRequest req;
+						deCONZ::ZclFrame zclFrame;
+
+						// ZDP Header
+						req.dstAddress() = sc->address;
+						req.setDstAddressMode(deCONZ::ApsNwkAddress);
+						req.setProfileId(sensor->fingerPrint().profileId);
+						req.setClusterId(IAS_ZONE_CLUSTER_ID);
+						req.setDstAddressMode(deCONZ::ApsExtAddress);
+						req.setSrcEndpoint(endpoint());
+						req.setTxOptions(deCONZ::ApsTxAcknowledgedTransmission);
+
+						zclFrame.setSequenceNumber(zclSeq++);
+						zclFrame.setCommandId(0x00); // enroll response
+
+						zclFrame.setFrameControl(deCONZ::ZclFCClusterCommand |
+													deCONZ::ZclFCDirectionClientToServer);
+
+						{ // payload
+							QDataStream stream(&zclFrame.payload(), QIODevice::WriteOnly);
+							stream.setByteOrder(QDataStream::LittleEndian);
+
+							quint8 code = 0x00; // success
+							quint8 zoneId = 100;
+
+							stream << code;
+							stream << zoneId;
+						}
+
+						{ // ZCL frame
+							QDataStream stream(&req.asdu(), QIODevice::WriteOnly);
+							stream.setByteOrder(QDataStream::LittleEndian);
+							zclFrame.writeToStream(stream);
+						}
+
+						DBG_Printf(DBG_INFO, "IAS Zone enroll reponse send\n");
+						if (apsCtrl->apsdeDataRequest(req) == deCONZ::Success)
+						{
+							// mark done
+							item->setValue(item->toNumber() & ~R_PENDING_ENROLL_RESPONSE);
+							return;
+						}
+					}
+				}
+                else
                 {
-                    continue;
+                    DBG_Printf(DBG_INFO, "[444] IAS zone type appears to be 0\n");
                 }
-
-                if (s.fingerPrint().hasInCluster(IAS_ZONE_CLUSTER_ID))
-                {
-                    item = s.item(RConfigPending);
-                }
-
-                if (item)
-                {
-                    break;
-                }
-            }
-
-            if (item && (item->toNumber() & R_PENDING_WRITE_CIE_ADDRESS))
-            {
-                // write CIE address needed for some IAS Zone devices
-                const quint64 iasCieAddress = apsCtrl->getParameter(deCONZ::ParamMacAddress);
-                deCONZ::ZclAttribute attr(0x0010, deCONZ::ZclIeeeAddress, QLatin1String("CIE address"), deCONZ::ZclReadWrite, false);
-                attr.setValue(iasCieAddress);
-
-                DBG_Printf(DBG_INFO, "[5] write IAS CIE address for 0x%016llx\n", sc->address.ext());
-
-                if (writeAttribute(sensor, sensor->fingerPrint().endpoint, IAS_ZONE_CLUSTER_ID, attr, 0))
-                {
-                    // mark done
-                    item->setValue(item->toNumber() & ~R_PENDING_WRITE_CIE_ADDRESS);
-                    return;
-                }
-            }
-            else if (item && (item->toNumber() & R_PENDING_ENROLL_RESPONSE))
-            {
-                DBG_Printf(DBG_INFO, "[6] send IAS zone enroll response to 0x%016llx\n", sc->address.ext());
-
-                deCONZ::ApsDataRequest req;
-                deCONZ::ZclFrame zclFrame;
-
-                // ZDP Header
-                req.dstAddress() = sc->address;
-                req.setDstAddressMode(deCONZ::ApsNwkAddress);
-                req.setProfileId(sensor->fingerPrint().profileId);
-                req.setClusterId(IAS_ZONE_CLUSTER_ID);
-                req.setDstAddressMode(deCONZ::ApsExtAddress);
-                req.setSrcEndpoint(endpoint());
-                req.setTxOptions(deCONZ::ApsTxAcknowledgedTransmission);
-
-                zclFrame.setSequenceNumber(zclSeq++);
-                zclFrame.setCommandId(0x00); // enroll response
-
-                zclFrame.setFrameControl(deCONZ::ZclFCClusterCommand |
-                                            deCONZ::ZclFCDirectionClientToServer);
-
-                { // payload
-                    QDataStream stream(&zclFrame.payload(), QIODevice::WriteOnly);
-                    stream.setByteOrder(QDataStream::LittleEndian);
-
-                    quint8 code = 0x00; // success
-                    quint8 zoneId = 100;
-
-                    stream << code;
-                    stream << zoneId;
-                }
-
-                { // ZCL frame
-                    QDataStream stream(&req.asdu(), QIODevice::WriteOnly);
-                    stream.setByteOrder(QDataStream::LittleEndian);
-                    zclFrame.writeToStream(stream);
-                }
-
-                DBG_Printf(DBG_INFO, "IAS Zone send enroll reponse\n");
-                if (apsCtrl->apsdeDataRequest(req) == deCONZ::Success)
-                {
-                    // mark done
-                    item->setValue(item->toNumber() & ~R_PENDING_ENROLL_RESPONSE);
-                    return;
-                }
-            }
+			}
+            // Sensor enrolled
+			else if (iasZoneState == 1)
+			{
+				// Do nothing
+                DBG_Printf(DBG_INFO, "[444] Sensor already enrolled\n");
+			}
         }
-        else if (sensor->modelId().startsWith(QLatin1String("RWL02")) || // Hue dimmer switch
+        
+        if (sensor->modelId().startsWith(QLatin1String("RWL02")) || // Hue dimmer switch
                  sensor->modelId().startsWith(QLatin1String("ROM00")) || // Hue smart button
                  sensor->modelId().startsWith(QLatin1String("Z3-1BRL"))) // Lutron Aurora Friends-of-Hue dimmer switch
 
