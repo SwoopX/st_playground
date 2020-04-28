@@ -1256,6 +1256,7 @@ public:
     LightNode *getLightNodeForId(const QString &id);
     Rule *getRuleForId(const QString &id);
     Rule *getRuleForName(const QString &name);
+    void writeIasCieAddress(Sensor*);
     void addSensorNode(const deCONZ::Node *node, const deCONZ::NodeEvent *event = 0);
     void addSensorNode(const deCONZ::Node *node, const SensorFingerprint &fingerPrint, const QString &type, const QString &modelId, const QString &manufacturer);
     void checkUpdatedFingerPrint(const deCONZ::Node *node, quint8 endpoint, Sensor *sensorNode);

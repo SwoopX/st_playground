@@ -4439,6 +4439,10 @@ void DeRestPluginPrivate::addSensorNode(const deCONZ::Node *node, const deCONZ::
             else
             {
                 checkSensorNodeReachable(sensor);
+                
+                // Writes CIE IAS address again if orphan sensor is found.
+                // May be omitted if sensors get consistently deleted.
+                writeIasCieAddress(sensor);
             }
         }
 
@@ -4458,6 +4462,10 @@ void DeRestPluginPrivate::addSensorNode(const deCONZ::Node *node, const deCONZ::
             else
             {
                 checkSensorNodeReachable(sensor);
+                
+                // Writes CIE IAS address again if orphan sensor is found.
+                // May be omitted if sensors get consistently deleted.
+                writeIasCieAddress(sensor);
             }
         }
 
@@ -4548,6 +4556,10 @@ void DeRestPluginPrivate::addSensorNode(const deCONZ::Node *node, const deCONZ::
             else
             {
                 checkSensorNodeReachable(sensor);
+                
+                // Writes CIE IAS address again if orphan sensor is found.
+                // May be omitted if sensors get consistently deleted.
+                writeIasCieAddress(sensor);
             }
         }
 
@@ -4566,6 +4578,10 @@ void DeRestPluginPrivate::addSensorNode(const deCONZ::Node *node, const deCONZ::
             else
             {
                 checkSensorNodeReachable(sensor);
+                
+                // Writes CIE IAS address again if orphan sensor is found.
+                // May be omitted if sensors get consistently deleted.
+                writeIasCieAddress(sensor);
             }
         }
 
@@ -4584,6 +4600,10 @@ void DeRestPluginPrivate::addSensorNode(const deCONZ::Node *node, const deCONZ::
             else
             {
                 checkSensorNodeReachable(sensor);
+                
+                // Writes CIE IAS address again if orphan sensor is found.
+                // May be omitted if sensors get consistently deleted.
+                writeIasCieAddress(sensor);
             }
         }
 
@@ -4622,6 +4642,10 @@ void DeRestPluginPrivate::addSensorNode(const deCONZ::Node *node, const deCONZ::
             else
             {
                 checkSensorNodeReachable(sensor);
+                
+                // Writes CIE IAS address again if orphan sensor is found.
+                // May be omitted if sensors get consistently deleted.
+                writeIasCieAddress(sensor);
             }
         }
 
@@ -5453,11 +5477,11 @@ void DeRestPluginPrivate::addSensorNode(const deCONZ::Node *node, const SensorFi
                     queryTime = queryTime.addSecs(1);
                 }
             }
-            else if (*ci == IAS_ZONE_CLUSTER_ID)
+            /*else if (*ci == IAS_ZONE_CLUSTER_ID)
             {
                 item = sensorNode.addItem(DataTypeUInt8, RConfigPending);
                 item->setValue(item->toNumber() | R_PENDING_WRITE_CIE_ADDRESS | R_PENDING_ENROLL_RESPONSE);
-            }
+            }*/
             else if (*ci == POWER_CONFIGURATION_CLUSTER_ID)
             {
                 //This device make a Rejoin every time, you trigger it, it's the only moment where you can read attribute.
@@ -5495,6 +5519,8 @@ void DeRestPluginPrivate::addSensorNode(const deCONZ::Node *node, const SensorFi
 
     if (searchSensorsState == SearchSensorsActive)
     {
+        writeIasCieAddress(sensor2);
+        
         Event e(RSensors, REventAdded, sensorNode.id());
         enqueueEvent(e);
 
@@ -5533,75 +5559,6 @@ void DeRestPluginPrivate::addSensorNode(const deCONZ::Node *node, const SensorFi
     q->startZclAttributeTimer(checkZclAttributesDelay);
 
     queSaveDb(DB_SENSORS , DB_SHORT_SAVE_DELAY);
-	
-    if (node->isRouter() && sensorNode.fingerPrint().hasInCluster(IAS_ZONE_CLUSTER_ID))
-    {
-        DBG_Printf(DBG_INFO, "[IAS] write IAS CIE address for 0x%016llx\n", sensorNode.address().ext());
-                    
-        // write CIE address needed for some IAS Zone devices
-        const quint64 iasCieAddress = apsCtrl->getParameter(deCONZ::ParamMacAddress);
-        deCONZ::ZclAttribute attr(0x0010, deCONZ::ZclIeeeAddress, QLatin1String("CIE address"), deCONZ::ZclReadWrite, false);
-        attr.setValue(iasCieAddress);
-        
-        if (writeAttribute(sensor2, sensorNode.fingerPrint().endpoint, IAS_ZONE_CLUSTER_ID, attr, 0))
-        {
-            // mark done
-            item->setValue(item->toNumber() & ~R_PENDING_WRITE_CIE_ADDRESS);
-            DBG_Printf(DBG_INFO, "[IAS] IAS CIE address written\n");
-            
-            {
-                DBG_Printf(DBG_INFO, "[IAS] send IAS zone enroll response to 0x%016llx\n", sensorNode.address().ext());
-
-                deCONZ::ApsDataRequest req;
-                deCONZ::ZclFrame zclFrame;
-
-                // ZDP Header
-                req.dstAddress() = sensorNode.address();
-                req.setDstAddressMode(deCONZ::ApsNwkAddress);
-                req.setProfileId(sensorNode.fingerPrint().profileId);
-                req.setClusterId(IAS_ZONE_CLUSTER_ID);
-                req.setDstAddressMode(deCONZ::ApsExtAddress);
-                req.setSrcEndpoint(endpoint());
-                req.setTxOptions(deCONZ::ApsTxAcknowledgedTransmission);
-
-                zclFrame.setSequenceNumber(zclSeq++);
-                zclFrame.setCommandId(0x00); // enroll response
-
-                zclFrame.setFrameControl(deCONZ::ZclFCClusterCommand |
-                                         deCONZ::ZclFCDirectionClientToServer);
-
-                { // payload
-                    QDataStream stream(&zclFrame.payload(), QIODevice::WriteOnly);
-                    stream.setByteOrder(QDataStream::LittleEndian);
-
-                    quint8 code = 0x00; // success
-                    quint8 zoneId = 100;
-
-                    stream << code;
-                    stream << zoneId;
-                }
-
-                { // ZCL frame
-                    QDataStream stream(&req.asdu(), QIODevice::WriteOnly);
-                    stream.setByteOrder(QDataStream::LittleEndian);
-                    zclFrame.writeToStream(stream);
-                }
-
-                DBG_Printf(DBG_INFO, "[IAS] IAS Zone send enroll reponse\n");
-                if (apsCtrl->apsdeDataRequest(req) == deCONZ::Success)
-                {
-                    // mark done
-                    item->setValue(item->toNumber() & ~R_PENDING_ENROLL_RESPONSE);
-                    DBG_Printf(DBG_INFO, "[IAS] IAS Zone enrolled successfully\n");
-                }
-            }
-        }
-        else
-        {
-            DBG_Printf(DBG_INFO, "[IAS] IAS CIE address write seems to have failed\n");
-        }
-    }
-
 }
 
 /*! Updates  SensorNode fingerprint if needed.
@@ -8947,6 +8904,33 @@ bool DeRestPluginPrivate::writeAttribute(RestNodeBase *restNode, quint8 endpoint
     }
 
     return addTask(task);
+}
+
+/*! Write IAS CIE address attribute for a node
+    Only supported ZLL and HA nodes will be added.
+    \param Sensor - sensor containing the IAS zone cluster
+ */
+void DeRestPluginPrivate::writeIasCieAddress(Sensor *sensor)
+{
+    ResourceItem *item = nullptr;
+    item = sensor->addItem(DataTypeUInt8, RConfigPending);
+    item->setValue(item->toNumber() | R_PENDING_WRITE_CIE_ADDRESS | R_PENDING_ENROLL_RESPONSE);
+
+    if (sensor->fingerPrint().hasInCluster(IAS_ZONE_CLUSTER_ID))
+    {
+        // write CIE address needed for some IAS Zone devices
+        const quint64 iasCieAddress = apsCtrl->getParameter(deCONZ::ParamMacAddress);
+        deCONZ::ZclAttribute attr(0x0010, deCONZ::ZclIeeeAddress, QLatin1String("CIE address"), deCONZ::ZclReadWrite, false);
+        attr.setValue(iasCieAddress);
+        
+        DBG_Printf(DBG_INFO, "[555] Write IAS CIE address for 0x%016llx\n", sensor->address().ext());
+
+        if (writeAttribute(sensor, sensor->fingerPrint().endpoint, IAS_ZONE_CLUSTER_ID, attr, 0))
+        {
+            // mark done
+            item->setValue(item->toNumber() & ~R_PENDING_WRITE_CIE_ADDRESS);
+        }
+    }
 }
 
 /*! Queue reading details of a scene from a node.
