@@ -296,3 +296,82 @@ void DeRestPluginPrivate::sendIasZoneEnrollResponse(const deCONZ::ApsDataIndicat
         DBG_Printf(DBG_INFO, "IAS Zone failed to send enroll reponse\n");
     }
 }
+
+/*! Check if a sensor is already enrolled
+    \param Sensor - sensor containing the IAS zone cluster
+ */
+void DeRestPluginPrivate::checkIasEnrollmentStatus(Sensor *sensor)
+{
+    if (sensor->fingerPrint().hasInCluster(IAS_ZONE_CLUSTER_ID))
+    {
+        NodeValue val = sensor->getZclValue(IAS_ZONE_CLUSTER_ID, 0x0000);
+                    
+        DBG_Printf(DBG_INFO, "[IAS] Processing\n");
+        DBG_Printf(DBG_INFO, "[IAS] %d\n",val.value);
+        deCONZ::NumericUnion iasZoneStatus = val.value;
+        
+        ResourceItem *item = nullptr;
+        item = sensor->item(RConfigPending);
+        
+        if(item && item->toNumber() == 0 && iasZoneStatus.u8 == 0)
+        {
+            DBG_Printf(DBG_INFO, "Item found\n");
+            DBG_Printf(DBG_INFO, "[IAS] Sensor NOT enrolled\n");
+            item->setValue(item->toNumber() | R_PENDING_WRITE_CIE_ADDRESS | R_PENDING_ENROLL_RESPONSE);
+            std::vector<uint16_t> attributes;
+            attributes.push_back(0x0000); // IAS zone status
+            attributes.push_back(0x0010); // IAS CIE address
+            if(readAttributes(sensor, sensor->fingerPrint().endpoint, IAS_ZONE_CLUSTER_ID, attributes))
+            {
+                queryTime = queryTime.addSecs(1);
+            }
+        }
+        else if(item &&
+                (item->toNumber() & R_PENDING_WRITE_CIE_ADDRESS) &&
+                (item->toNumber() & R_PENDING_ENROLL_RESPONSE) &&
+                iasZoneStatus.u8 == 0)
+        {
+            DBG_Printf(DBG_INFO, "[IAS] Sensor enrollment pending\n");
+            //writeIasCieAddress(sensor);
+        }
+        else if(iasZoneStatus.u8 == 1)
+        {
+            DBG_Printf(DBG_INFO, "[IAS] Sensor enrolled\n");
+        }
+        else if(item && item->toNumber() == 48 && iasZoneStatus.u8 == 1)        // Sanity check
+        {
+            DBG_Printf(DBG_INFO, "[IAS] Sensor reporting enrolled. Clearing config pending...\n");
+            item->setValue(item->toNumber() & ~R_PENDING_WRITE_CIE_ADDRESS);
+            item->setValue(item->toNumber() & ~R_PENDING_ENROLL_RESPONSE);
+        }
+        else
+        {
+            DBG_Printf(DBG_INFO, "[IAS] Unknown condition\n");
+        }
+    }
+}
+
+/*! Write IAS CIE address attribute for a node.
+    \param Sensor - sensor containing the IAS zone cluster
+ */
+void DeRestPluginPrivate::writeIasCieAddress(Sensor *sensor)
+{
+    ResourceItem *item = nullptr;
+    item = sensor->item(RConfigPending);
+    
+    if (sensor->fingerPrint().hasInCluster(IAS_ZONE_CLUSTER_ID) && item && (item->toNumber() & R_PENDING_WRITE_CIE_ADDRESS))
+    {
+        // write CIE address needed for some IAS Zone devices
+        const quint64 iasCieAddress = apsCtrl->getParameter(deCONZ::ParamMacAddress);
+        deCONZ::ZclAttribute attr(0x0010, deCONZ::ZclIeeeAddress, QLatin1String("CIE address"), deCONZ::ZclReadWrite, false);
+        attr.setValue(iasCieAddress);
+        
+        DBG_Printf(DBG_INFO, "[IAS] Write IAS CIE address for 0x%016llx\n", sensor->address().ext());
+
+        if (writeAttribute(sensor, sensor->fingerPrint().endpoint, IAS_ZONE_CLUSTER_ID, attr, 0))
+        {
+            // mark done
+            item->setValue(item->toNumber() & ~R_PENDING_WRITE_CIE_ADDRESS);
+        }
+    }
+}
