@@ -288,6 +288,7 @@
 #define VENDOR_BEGA         0x1105
 #define VENDOR_PHYSICAL     0x110A // Used by SmartThings
 #define VENDOR_OSRAM        0x110C
+#define VENDOR_PROFALUX     0x1110
 #define VENDOR_JASCO        0x1124 // Used by GE
 #define VENDOR_BUSCH_JAEGER 0x112E
 #define VENDOR_SERCOMM      0x1131
@@ -432,6 +433,7 @@ extern const quint64 ubisysMacPrefix;
 extern const quint64 xalMacPrefix;
 extern const quint64 develcoMacPrefix;
 extern const quint64 legrandMacPrefix;
+extern const quint64 profaluxMacPrefix;
 extern const quint64 xiaomiMacPrefix;
 extern const quint64 computimeMacPrefix;
 extern const quint64 konkeMacPrefix;
@@ -475,6 +477,7 @@ inline bool checkMacVendor(quint64 addr, quint16 vendor)
             return prefix == ikeaMacPrefix ||
                    prefix == silabsMacPrefix ||
                    prefix == silabs2MacPrefix ||
+                   prefix == silabs4MacPrefix ||
                    prefix == energyMiMacPrefix ||
                    prefix == emberMacPrefix;
         case VENDOR_JASCO:
@@ -529,6 +532,8 @@ inline bool checkMacVendor(quint64 addr, quint16 vendor)
             return prefix == develcoMacPrefix;
         case VENDOR_LEGRAND:
             return prefix == legrandMacPrefix;
+        case VENDOR_PROFALUX:
+            return prefix == profaluxMacPrefix;
         case VENDOR_NETVOX:
             return prefix == netvoxMacPrefix;
         case VENDOR_AURORA:
@@ -1030,7 +1035,7 @@ public:
     int updateRule(const ApiRequest &req, ApiResponse &rsp);
     int deleteRule(const ApiRequest &req, ApiResponse &rsp);
     void queueCheckRuleBindings(const Rule &rule);
-    bool evaluateRule(Rule &rule, const Event &e, Resource *eResource, ResourceItem *eItem, QDateTime now);
+    bool evaluateRule(Rule &rule, const Event &e, Resource *eResource, ResourceItem *eItem, QDateTime now, QDateTime previousNow);
     void indexRuleTriggers(Rule &rule);
     void triggerRule(Rule &rule);
     bool ruleToMap(const Rule *rule, QVariantMap &map);
@@ -1256,7 +1261,6 @@ public:
     LightNode *getLightNodeForId(const QString &id);
     Rule *getRuleForId(const QString &id);
     Rule *getRuleForName(const QString &name);
-    void writeIasCieAddress(Sensor*);
     void addSensorNode(const deCONZ::Node *node, const deCONZ::NodeEvent *event = 0);
     void addSensorNode(const deCONZ::Node *node, const SensorFingerprint &fingerPrint, const QString &type, const QString &modelId, const QString &manufacturer);
     void checkUpdatedFingerPrint(const deCONZ::Node *node, quint8 endpoint, Sensor *sensorNode);
@@ -1306,6 +1310,7 @@ public:
     void storeRecoverOnOffBri(LightNode *lightNode);
     bool flsNbMaintenance(LightNode *lightNode);
     bool pushState(QString json, QTcpSocket *sock);
+    void patchNodeDescriptor(const deCONZ::ApsDataIndication &ind);
 
     void pushClientForClose(QTcpSocket *sock, int closeTimeout, const QHttpRequestHeader &hdr);
 
@@ -1356,6 +1361,7 @@ public:
     void handleZdpIndication(const deCONZ::ApsDataIndication &ind);
     bool handleMgmtBindRspConfirm(const deCONZ::ApsDataConfirm &conf);
     void handleDeviceAnnceIndication(const deCONZ::ApsDataIndication &ind);
+    void handleNodeDescriptorResponseIndication(const deCONZ::ApsDataIndication &ind);
     void handleIeeeAddressReqIndication(const deCONZ::ApsDataIndication &ind);
     void handleNwkAddressReqIndication(const deCONZ::ApsDataIndication &ind);
     void handleMgmtBindRspIndication(const deCONZ::ApsDataIndication &ind);
