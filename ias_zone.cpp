@@ -237,7 +237,7 @@ void DeRestPluginPrivate::handleIasZoneClusterIndication(const deCONZ::ApsDataIn
         stream >> zoneType;
         stream >> manufacturer;
 
-        DBG_Printf(DBG_ZCL, "IAS Zone Enroll Request, zone type: 0x%04X, manufacturer: 0x%04X\n", zoneType, manufacturer);
+        DBG_Printf(DBG_INFO, "[IAS] Zone Enroll Request, zone type: 0x%04X, manufacturer: 0x%04X\n", zoneType, manufacturer);
 
         sendIasZoneEnrollResponse(ind, zclFrame);
 

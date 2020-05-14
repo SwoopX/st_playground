@@ -7655,6 +7655,10 @@ void DeRestPluginPrivate::updateSensorNode(const deCONZ::NodeEvent &event)
                                         writeIasCieAddress(&*i);
                                     }
                                 }
+                                else
+                                {
+                                    DBG_Printf(DBG_INFO, "Sensor search not active\n");
+                                }
 
                                 updateSensorEtag(&*i);
                             }
