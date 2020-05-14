@@ -14324,8 +14324,6 @@ void DeRestPluginPrivate::delayedFastEnddeviceProbe(const deCONZ::NodeEvent *eve
 
             if (thermostatClusterEndpoint == 0) // e.g. Eurotronic SPZB0001 thermostat
             {  }
-            else if (iasZoneType > 0) // Trust / and IAS motion and contact sensors
-            {  }
             else if (modelId.startsWith(QLatin1String("lumi.")))
             {
                 skip = true; // Xiaomi Mija devices won't respond to ZCL read
