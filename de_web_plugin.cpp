@@ -4234,20 +4234,14 @@ void DeRestPluginPrivate::addSensorNode(const deCONZ::Node *node, const deCONZ::
 
                 case TEMPERATURE_MEASUREMENT_CLUSTER_ID:
                 {
-                    if (modelId == QLatin1String("VOC_Sensor"))
-                    {
-                        fpHumiditySensor.inClusters.push_back(ci->id());
-                    }
                     fpTemperatureSensor.inClusters.push_back(ci->id());
                 }
                     break;
 
                 case RELATIVE_HUMIDITY_CLUSTER_ID:
                 {
-                    if(modelId != QLatin1String("VOC_Sensor"))
-                    {
-                        fpHumiditySensor.inClusters.push_back(ci->id());
-                    }
+
+                    fpHumiditySensor.inClusters.push_back(ci->id());
                 }
                     break;
 
@@ -6336,33 +6330,36 @@ void DeRestPluginPrivate::updateSensorNode(const deCONZ::NodeEvent &event)
                             {
                                 // humidity sensor values are transferred via temperature cluster 0x0001 attribute
                                 // see: https://github.com/dresden-elektronik/deconz-rest-plugin/pull/1964
+                                
+                                Sensor *sensor2 = getSensorNodeForFingerPrint(event.node()->address().ext(), fpHumiditySensor, "ZHAHumidity");
+                                //Sensor *sensor = getSensorNodeForFingerPrint(ind.gpdSrcId(), fp, QLatin1String("ZGPSwitch"));
 
                                 if (updateType != NodeValue::UpdateInvalid)
                                 {
-                                    i->setZclValue(updateType, event.endpoint(), event.clusterId(), 0x0001, ia->numericValue());
-                                    pushZclValueDb(event.node()->address().ext(), event.endpoint(), event.clusterId(), ia->id(), ia->numericValue().u16);
+                                    i->setZclValue(updateType, event.endpoint(), RELATIVE_HUMIDITY_CLUSTER_ID, 0x0000, ia->numericValue());
+                                    pushZclValueDb(event.node()->address().ext(), event.endpoint(), RELATIVE_HUMIDITY_CLUSTER_ID, 0x0000, ia->numericValue().u16);
                                 }
 
                                 int humidity = ia->numericValue().u16;
-                                ResourceItem *item = i->item(RStateHumidity);
+                                ResourceItem *item = sensor2->item(RStateHumidity);
 
                                 if (item)
                                 {
-                                    ResourceItem *item2 = i->item(RConfigOffset);
+                                    ResourceItem *item2 = sensor2->item(RConfigOffset);
                                     if (item2 && item2->toNumber() != 0)
                                     {
                                         int _humidity = humidity + static_cast<int>(item2->toNumber());
                                         humidity = _humidity < 0 ? 0 : _humidity > 10000 ? 10000 : _humidity;
                                     }
                                     item->setValue(humidity);
-                                    i->updateStateTimestamp();
-                                    i->setNeedSaveDatabase(true);
-                                    Event e(RSensors, RStateHumidity, i->id(), item);
+                                    sensor2->updateStateTimestamp();
+                                    sensor2->setNeedSaveDatabase(true);
+                                    Event e(RSensors, RStateHumidity, sensor2->id(), item);
                                     enqueueEvent(e);
-                                    enqueueEvent(Event(RSensors, RStateLastUpdated, i->id()));
+                                    enqueueEvent(Event(RSensors, RStateLastUpdated, sensor2->id()));
                                 }
 
-                                updateSensorEtag(&*i);
+                                updateSensorEtag(&*sensor2);
                             }
                         }
                     }
