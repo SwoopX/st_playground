@@ -6331,7 +6331,7 @@ void DeRestPluginPrivate::updateSensorNode(const deCONZ::NodeEvent &event)
                                 // humidity sensor values are transferred via temperature cluster 0x0001 attribute
                                 // see: https://github.com/dresden-elektronik/deconz-rest-plugin/pull/1964
                                 
-                                Sensor *sensor2 = getSensorNodeForFingerPrint(event.node()->address().ext(), fpHumiditySensor, "ZHAHumidity");
+                                Sensor *sensor2 = getSensorNodeForFingerPrint(event.node()->address().ext(), i->fingerPrint(), "ZHAHumidity");
                                 //Sensor *sensor = getSensorNodeForFingerPrint(ind.gpdSrcId(), fp, QLatin1String("ZGPSwitch"));
 
                                 if (updateType != NodeValue::UpdateInvalid)
