@@ -578,6 +578,40 @@ static const Sensor::ButtonMap sunricherCCTMap[] = {
     { Sensor::ModeNone,             0x00, 0x0000, 0x00, 0,    0,                                           nullptr }
 };
 
+static const Sensor::ButtonMap rgbgenie5121Map[] = {
+//    mode                          ep    cluster cmd   param button                                       name
+    // On button
+    { Sensor::ModeScenes,           0x01, 0x0006, 0x01, 0,    S_BUTTON_1 + S_BUTTON_ACTION_SHORT_RELEASED, "On" },
+    // Off button
+    { Sensor::ModeScenes,           0x01, 0x0006, 0x00, 0,    S_BUTTON_2 + S_BUTTON_ACTION_SHORT_RELEASED, "Off" },
+    // Dim up
+    { Sensor::ModeScenes,           0x01, 0x0008, 0x06, 0,    S_BUTTON_3 + S_BUTTON_ACTION_SHORT_RELEASED, "Step up (with on/off)" },
+    { Sensor::ModeScenes,           0x01, 0x0008, 0x05, 0,    S_BUTTON_3 + S_BUTTON_ACTION_HOLD, "Move up (with on/off)" },
+    { Sensor::ModeScenes,           0x01, 0x0008, 0x07, 0,    S_BUTTON_3 + S_BUTTON_ACTION_LONG_RELEASED, "Stop_ (with on/off)" },
+    // Dim down
+    { Sensor::ModeScenes,           0x01, 0x0008, 0x06, 1,    S_BUTTON_4 + S_BUTTON_ACTION_SHORT_RELEASED, "Step down (with on/off)" },
+    { Sensor::ModeScenes,           0x01, 0x0008, 0x05, 1,    S_BUTTON_4 + S_BUTTON_ACTION_HOLD, "Move down (with on/off)" },
+    { Sensor::ModeScenes,           0x01, 0x0008, 0x07, 0,    S_BUTTON_4 + S_BUTTON_ACTION_LONG_RELEASED, "Stop_ (with on/off)" },
+    // Scene button
+    { Sensor::ModeScenes,           0x01, 0x0005, 0x05, 0,    S_BUTTON_5 + S_BUTTON_ACTION_SHORT_RELEASED, "Recall scene 1" },
+    { Sensor::ModeScenes,           0x01, 0x0005, 0x04, 0,    S_BUTTON_5 + S_BUTTON_ACTION_LONG_RELEASED, "Store scene 1" },
+    // end
+    { Sensor::ModeNone,             0x00, 0x0000, 0x00, 0,    0,                                           nullptr }
+};
+
+
+/*
+Here is the short-press "On" button:        ep: 0x01 cl: 0x0006 cmd: 0x01 pl[0]: 000        ok
+Off:                                        ep: 0x01 cl: 0x0006 cmd: 0x00 pl[0]: 000        ok
+Short-press "Dim" button:                   ep: 0x01 cl: 0x0008 cmd: 0x06 pl[0]: 001        angepasst
+Long-press and release "Dim" button:        ep: 0x01 cl: 0x0008 cmd: 0x05 pl[0]: 001
+                                            ep: 0x01 cl: 0x0008 cmd: 0x07 pl[0]: 000        
+Short-press scene button (Scene recall):    ep: 0x01 cl: 0x0005 cmd: 0x05 pl[0]: 000        angepasst
+Long-press scene button (Scene Store):      ep: 0x01 cl: 0x0005 cmd: 0x04 pl[0]: 000        angepasst
+Short-press brighten button:                ep: 0x01 cl: 0x0008 cmd: 0x06 pl[0]: 000
+Long-press and release brighten button:     ep: 0x01 cl: 0x0008 cmd: 0x05 pl[0]: 000
+                                            ep: 0x01 cl: 0x0008 cmd: 0x07 pl[0]: 000
+*/
 static const Sensor::ButtonMap sunricherMap[] = {
 //    mode                          ep    cluster cmd   param button                                       name
     // 1st On button
@@ -728,6 +762,16 @@ static const Sensor::ButtonMap bitronRemoteMap[] = {
     { Sensor::ModeScenes,           0x01, 0x0006, 0x01, 0,    S_BUTTON_2 + S_BUTTON_ACTION_SHORT_RELEASED, "On" },
     { Sensor::ModeScenes,           0x01, 0x0006, 0x00, 0,    S_BUTTON_3 + S_BUTTON_ACTION_SHORT_RELEASED, "Off" },
     { Sensor::ModeScenes,           0x01, 0x0008, 0x06, 1,    S_BUTTON_4 + S_BUTTON_ACTION_SHORT_RELEASED, "Step down (with on/off)" },
+    // end
+    { Sensor::ModeNone,             0x00, 0x0000, 0x00, 0,    0,                                           nullptr }
+};
+
+static const Sensor::ButtonMap rcv14Map[] = {
+//    mode                          ep    cluster cmd   param button                                       name
+    { Sensor::ModeScenes,           0x01, 0x0501, 0x00,  1,    S_BUTTON_1 + S_BUTTON_ACTION_SHORT_RELEASED, "Arm day/home zones only" },
+    { Sensor::ModeScenes,           0x01, 0x0501, 0x00,  0,    S_BUTTON_2 + S_BUTTON_ACTION_SHORT_RELEASED, "Disarm" },
+    { Sensor::ModeScenes,           0x01, 0x0501, 0x02,  0,    S_BUTTON_3 + S_BUTTON_ACTION_SHORT_RELEASED, "Emergency" },
+    { Sensor::ModeScenes,           0x01, 0x0501, 0x00,  3,    S_BUTTON_4 + S_BUTTON_ACTION_SHORT_RELEASED, "Arm all zones" },
     // end
     { Sensor::ModeNone,             0x00, 0x0000, 0x00, 0,    0,                                           nullptr }
 };
@@ -1301,6 +1345,10 @@ const Sensor::ButtonMap *Sensor::buttonMap()
             if      (modelid.startsWith(QLatin1String("ZGRC-KEY"))) { m_buttonMap = sunricherCCTMap; }
             else if (modelid.startsWith(QLatin1String("ZG2833K"))) { m_buttonMap = sunricherMap; }
         }
+        else if (manufacturer == QLatin1String("RGBgenie"))
+        {
+            if (modelid.startsWith(QLatin1String("RGBgenie ZB-5121"))) { m_buttonMap = rgbgenie5121Map; }
+        }
         else if (manufacturer == QLatin1String("Bitron Home"))
         {
             if (modelid.startsWith(QLatin1String("902010/23"))) { m_buttonMap = bitronRemoteMap; }
@@ -1308,6 +1356,10 @@ const Sensor::ButtonMap *Sensor::buttonMap()
         else if (manufacturer == QLatin1String("Namron AS"))
         {
             if (modelid.startsWith(QLatin1String("4512703"))) { m_buttonMap = sunricherMap; }
+        }
+        else if (manufacturer == QLatin1String("Heiman"))
+        {
+            if (modelid == QLatin1String("RC_V14")) { m_buttonMap = rcv14Map; }
         }
     }
 
