@@ -25,7 +25,7 @@ void DeRestPluginPrivate::handleApplianceAlertClusterIndication(const deCONZ::Ap
     if (zclFrame.commandId() == CMD_GET_ALERTS_RESPONSE && zclFrame.isClusterCommand())
     {
         quint8 alertsCount;
-        quint24 alertsStructure;
+        quint16 alertsStructure; // 24 Bit long, but 16 suffice
 
         stream >> alertsCount;
         stream >> alertsStructure;
@@ -42,7 +42,7 @@ void DeRestPluginPrivate::handleApplianceAlertClusterIndication(const deCONZ::Ap
         fp.inClusters.push_back(POWER_CONFIGURATION_CLUSTER_ID);
         fp.inClusters.push_back(APPLIANCE_EVENTS_AND_ALERTS_ID);
 
-        Sensor *sensor = getSensorNodeForFingerPrint(ind.srcAddress(), fp, QLatin1String("ZHAWater"));
+        Sensor *sensor = getSensorNodeForFingerPrint(ind.srcAddress().ext(), fp, "ZHAWater");
         ResourceItem *item = sensor ? sensor->item(RStateWater) : nullptr;
         
         if (alertsStructure & ALERTS_ALERT)
@@ -56,23 +56,22 @@ void DeRestPluginPrivate::handleApplianceAlertClusterIndication(const deCONZ::Ap
 
         if (sensor && item)
         {
-            //if (!item->toBool())
             if (alertsStructure & ALERTS_ALERT)
             {
-                DBG_Printf(DBG_INFO_L2, "[APPL] Settings sensor state alert to "true"...\n");
+                DBG_Printf(DBG_INFO_L2, "[APPL] Settings sensor state alert to 'true'...\n");
                 item->setValue(true);
             }
             else
             {
-                DBG_Printf(DBG_INFO_L2, "[APPL] Settings sensor state alert to "false"...\n");
+                DBG_Printf(DBG_INFO_L2, "[APPL] Settings sensor state alert to 'false'...\n");
                 item->setValue(false);
             }
-            sensor.updateStateTimestamp();
-            enqueueEvent(Event(RSensors, RStateWater, sensor.id(), item));
-            enqueueEvent(Event(RSensors, RStateLastUpdated, sensor.id()));
+            sensor->updateStateTimestamp();
+            enqueueEvent(Event(RSensors, RStateWater, sensor->id(), item));
+            enqueueEvent(Event(RSensors, RStateLastUpdated, sensor->id()));
             sensor->setNeedSaveDatabase(true);
             queSaveDb(DB_SENSORS, DB_SHORT_SAVE_DELAY);
-            updateSensorEtag(&*i);
+            updateSensorEtag(&*sensor);
         }
         else
         {

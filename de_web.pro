@@ -117,8 +117,7 @@ HEADERS  = bindings.h \
            sensor.h \
            websocket_server.h
 
-SOURCES  = appliances.cpp \
-           authorisation.cpp \
+SOURCES  = authorisation.cpp \
            bindings.cpp \
            change_channel.cpp \
            connectivity.cpp \
@@ -170,6 +169,7 @@ SOURCES  = appliances.cpp \
            rest_userparameter.cpp \
            zcl_tasks.cpp \
            window_covering.cpp \
+           appliances.cpp \
            websocket_server.cpp
 
 win32 {
