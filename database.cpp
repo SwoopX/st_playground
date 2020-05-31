@@ -2994,6 +2994,13 @@ static int sqliteLoadAllSensorsCallback(void *user, int ncols, char **colval , c
             {
                 clusterId = clusterId ? clusterId : RELATIVE_HUMIDITY_CLUSTER_ID;
             }
+            if (modelId == QLatin1String("VOC_Sensor"))
+            {
+                item = sensorNode.addItem(DataTypeInt16, RStateEco2); // eCO2
+                item->setValue(0);
+                item = sensorNode.addItem(DataTypeUInt16, RStateVoc); // VOC value
+                item->setValue(0);
+            }
             item = sensor.addItem(DataTypeUInt16, RStateHumidity);
             item->setValue(0);
             item = sensor.addItem(DataTypeInt16, RConfigOffset);

@@ -5034,6 +5034,11 @@ void DeRestPluginPrivate::addSensorNode(const deCONZ::Node *node, const SensorFi
         {
             clusterId = RELATIVE_HUMIDITY_CLUSTER_ID;
         }
+        if (modelId == QLatin1String("VOC_Sensor"))
+        {
+            sensorNode.addItem(DataTypeInt16, RStateEco2); // eCO2
+            sensorNode.addItem(DataTypeUInt16, RStateVoc); // VOC value
+        }
         sensorNode.addItem(DataTypeUInt16, RStateHumidity);
         item = sensorNode.addItem(DataTypeInt16, RConfigOffset);
         item->setValue(0);
@@ -6355,10 +6360,10 @@ void DeRestPluginPrivate::updateSensorNode(const deCONZ::NodeEvent &event)
                                 if (updateType != NodeValue::UpdateInvalid)
                                 {
                                     i->setZclValue(updateType, event.endpoint(), RELATIVE_HUMIDITY_CLUSTER_ID, 0x0000, ia->numericValue());
-                                    pushZclValueDb(event.node()->address().ext(), event.endpoint(), RELATIVE_HUMIDITY_CLUSTER_ID, 0x0000, ia->numericValue().u16);
+                                    pushZclValueDb(event.node()->address().ext(), event.endpoint(), RELATIVE_HUMIDITY_CLUSTER_ID, 0x0000, ia->numericValue().s16);
                                 }
 
-                                int humidity = ia->numericValue().u16;
+                                int humidity = ia->numericValue().s16;
                                 ResourceItem *item = sensor2->item(RStateHumidity);
 
                                 if (item)
@@ -6373,6 +6378,50 @@ void DeRestPluginPrivate::updateSensorNode(const deCONZ::NodeEvent &event)
                                     sensor2->updateStateTimestamp();
                                     sensor2->setNeedSaveDatabase(true);
                                     Event e(RSensors, RStateHumidity, sensor2->id(), item);
+                                    enqueueEvent(e);
+                                    enqueueEvent(Event(RSensors, RStateLastUpdated, sensor2->id()));
+                                }
+
+                                updateSensorEtag(&*sensor2);
+                            }
+                            else if (i->modelId().startsWith(QLatin1String("VOC_Sensor")) && ia->id() == 0x0002) // LifeControl MCLH-08 eCO2
+                            {
+                                // humidity sensor values are transferred via temperature cluster 0x0001 attribute
+                                // see: https://github.com/dresden-elektronik/deconz-rest-plugin/pull/1964
+                                
+                                Sensor *sensor2 = getSensorNodeForFingerPrint(event.node()->address().ext(), i->fingerPrint(), "ZHAHumidity");
+
+                                int eco2 = ia->numericValue().s16;
+                                ResourceItem *item = sensor2->item(RStateEco2);
+
+                                if (item)
+                                {
+                                    item->setValue(eco2);
+                                    sensor2->updateStateTimestamp();
+                                    sensor2->setNeedSaveDatabase(true);
+                                    Event e(RSensors, RStateEco2, sensor2->id(), item);
+                                    enqueueEvent(e);
+                                    enqueueEvent(Event(RSensors, RStateLastUpdated, sensor2->id()));
+                                }
+
+                                updateSensorEtag(&*sensor2);
+                            }
+                            else if (i->modelId().startsWith(QLatin1String("VOC_Sensor")) && ia->id() == 0x0003) // LifeControl MCLH-08 VOC value
+                            {
+                                // humidity sensor values are transferred via temperature cluster 0x0001 attribute
+                                // see: https://github.com/dresden-elektronik/deconz-rest-plugin/pull/1964
+                                
+                                Sensor *sensor2 = getSensorNodeForFingerPrint(event.node()->address().ext(), i->fingerPrint(), "ZHAHumidity");
+
+                                int voc = ia->numericValue().u16;
+                                ResourceItem *item = sensor2->item(RStateVoc);
+
+                                if (item)
+                                {
+                                    item->setValue(voc);
+                                    sensor2->updateStateTimestamp();
+                                    sensor2->setNeedSaveDatabase(true);
+                                    Event e(RSensors, RStateVoc, sensor2->id(), item);
                                     enqueueEvent(e);
                                     enqueueEvent(Event(RSensors, RStateLastUpdated, sensor2->id()));
                                 }
