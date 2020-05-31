@@ -117,7 +117,8 @@ HEADERS  = bindings.h \
            sensor.h \
            websocket_server.h
 
-SOURCES  = authorisation.cpp \
+SOURCES  = appliances.cpp \
+           authorisation.cpp \
            bindings.cpp \
            change_channel.cpp \
            connectivity.cpp \

@@ -699,6 +699,10 @@ void DeRestPluginPrivate::apsdeDataIndication(const deCONZ::ApsDataIndication &i
         case BASIC_CLUSTER_ID:
             handleBasicClusterIndication(ind, zclFrame);
             break;
+            
+        case APPLIANCE_EVENTS_AND_ALERTS_ID:
+            handleApplianceAlertClusterIndication(ind, zclFrame);
+            break;
 
         default:
         {
