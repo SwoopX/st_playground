@@ -19,10 +19,16 @@ void DeRestPluginPrivate::handleApplianceAlertClusterIndication(const deCONZ::Ap
 
     if (!(zclFrame.frameControl() & deCONZ::ZclFCDirectionServerToClient))
     {
+        DBG_Printf(DBG_INFO_L2, "[APPL] Seems we do not have the right communication direction\n");
         return;
     }
     
-    if (zclFrame.commandId() == CMD_GET_ALERTS_RESPONSE && zclFrame.isClusterCommand())
+    if (zclFrame.isClusterCommand())
+    {
+        DBG_Printf(DBG_INFO_L2, "[APPL] Command is cluster command\n");
+    }
+    
+    if ((zclFrame.commandId() == CMD_GET_ALERTS_RESPONSE || zclFrame.commandId() == CMD_ALERTS_NOTIFICATION) && zclFrame.isClusterCommand())
     {
         quint8 alertsCount;
         quint16 alertsStructure; // 24 Bit long, but 16 suffice
@@ -77,5 +83,9 @@ void DeRestPluginPrivate::handleApplianceAlertClusterIndication(const deCONZ::Ap
         {
             DBG_Printf(DBG_INFO_L2, "[APPL] Sensor or item not found\n");
         }
+    }
+    else
+    {
+        DBG_Printf(DBG_INFO_L2, "[APPL] Seems we haven received the right command\n");
     }
 }
