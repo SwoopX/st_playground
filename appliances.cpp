@@ -23,12 +23,7 @@ void DeRestPluginPrivate::handleApplianceAlertClusterIndication(const deCONZ::Ap
         return;
     }
     
-    if (zclFrame.isClusterCommand())
-    {
-        DBG_Printf(DBG_INFO_L2, "[APPL] Command is cluster command\n");
-    }
-    
-    if ((zclFrame.commandId() == CMD_GET_ALERTS_RESPONSE || zclFrame.commandId() == CMD_ALERTS_NOTIFICATION) && zclFrame.isClusterCommand())
+    if (zclFrame.commandId() == CMD_ALERTS_NOTIFICATION && zclFrame.isClusterCommand())
     {
         quint8 alertsCount;
         quint16 alertsStructure; // 24 Bit long, but 16 suffice
@@ -46,7 +41,7 @@ void DeRestPluginPrivate::handleApplianceAlertClusterIndication(const deCONZ::Ap
         fp.deviceId = 0x0302;
         fp.profileId = 0x0104;
         fp.inClusters.push_back(POWER_CONFIGURATION_CLUSTER_ID);
-        fp.inClusters.push_back(APPLIANCE_EVENTS_AND_ALERTS_ID);
+        fp.inClusters.push_back(APPLIANCE_EVENTS_AND_ALERTS_CLUSTER_ID);
 
         Sensor *sensor = getSensorNodeForFingerPrint(ind.srcAddress().ext(), fp, "ZHAWater");
         ResourceItem *item = sensor ? sensor->item(RStateWater) : nullptr;
